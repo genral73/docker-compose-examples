@@ -1,0 +1,91 @@
+version: "3.3"
+services:
+
+  odoo12:
+    image: odoo:12.0
+    container_name: odoo12
+    depends_on:
+      - pgpool
+    ports:
+      - "8069:8069"
+    tty: true
+    command: -- --dev=reload
+  #    command: odoo scaffold /mnt/extra-addons/test_module      
+    volumes:
+      - ./addons:/mnt/extra-addons
+      - ./etc:/etc/odoo
+    networks:
+      dbnet:
+        ipv4_address: 192.168.16.17     
+
+  pgpool:
+    image: docker.io/bitnami/pgpool:latest
+    ports:
+      - 5432:5432
+    depends_on:
+      - pg_master_1
+      - pg_slave_1      
+    environment:
+      - PGPOOL_BACKEND_NODES=0:pg_master_1:5432,1:pg_slave_1:5432
+      - PGPOOL_SR_CHECK_USER=genral73
+      - PGPOOL_SR_CHECK_PASSWORD=123456
+      - PGPOOL_POSTGRES_USERNAME=genral73
+      - PGPOOL_POSTGRES_PASSWORD=123456
+      - PGPOOL_ADMIN_USERNAME=admin
+      - PGPOOL_ADMIN_PASSWORD=123456
+      - PGPOOL_ENABLE_LOAD_BALANCING=yes
+      - PGPOOL_ENABLE_POOL_HBA=yes
+      - PGPOOL_ENABLE_STATEMENT_LOAD_BALANCING=yes
+      - PGPOOL_ENABLE_LOG_PER_NODE_STATEMENT=yes
+    healthcheck:
+      test: ["CMD", "/opt/bitnami/scripts/pgpool/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      dbnet:
+        ipv4_address: 192.168.16.15
+
+  pg_master_1:
+    build: ./master
+    ports:
+        - "5445:5432"
+    volumes:
+        - mdata:/var/lib/postgresql/data
+    environment:
+        - POSTGRES_USER=genral73
+        - POSTGRES_PASSWORD=123456
+        - POSTGRES_DB=postgres
+        - PG_REP_USER=rep
+        - PG_REP_PASSWORD=123456
+    networks:
+      dbnet:
+        ipv4_address: 192.168.16.13
+    restart: always
+  pg_slave_1:
+    build: ./slave
+    ports:
+        - "5446:5432"
+    volumes:
+        - sdata:/var/lib/postgresql/data
+    environment:
+        - POSTGRES_USER=genral73
+        - POSTGRES_PASSWORD=123456
+        - POSTGRES_DB=postgres
+        - PG_REP_USER=rep
+        - PG_REP_PASSWORD=123456
+    networks:
+      dbnet:
+        ipv4_address: 192.168.16.11
+    restart: always
+
+volumes:
+  mdata:
+  sdata:
+networks:
+  dbnet:
+    driver: bridge
+    ipam:
+        driver: default
+        config:
+          - subnet: 192.168.16.0/24
